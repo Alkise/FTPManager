@@ -1,4 +1,4 @@
 FTPManager
 ==========
 
-FTP File Manager client
+FTP Manager client side
