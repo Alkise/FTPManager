@@ -6,8 +6,14 @@ package ru.alkise.manager.client.view;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -22,6 +28,7 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.border.BevelBorder;
 import net.miginfocom.swing.MigLayout;
+import ru.alkise.manager.client.controller.ManagerControllerIntf;
 import ru.alkise.manager.client.model.ManagerModelIntf;
 import ru.alkise.manager.client.model.observer.ObserverIntf;
 
@@ -31,21 +38,35 @@ import ru.alkise.manager.client.model.observer.ObserverIntf;
  */
 public class ManagerView extends JFrame implements ObserverIntf {
 
-    private ManagerModelIntf model;
-    private JTextField localDirectoryField;
-    private JTextField hostnameField;
-    private JTextField usernameField;
-    private JTextField passwordField;
-    private JTextField workingDirectoryField;
-    private JButton saveSettingsButton;
-    private JList fromList;
-    private JList toList;
-    private JCheckBox copyNewBox;
-    private JCheckBox deleteOldBox;
-    private JButton runButton;
-    private DefaultListModel<String> fromListModel;
-    private DefaultListModel<String> toListModel;
-    private JLabel messageLabel;
+    private final ManagerModelIntf model;
+    private final JTextField localDirectoryField;
+    private final JTextField hostnameField;
+    private final JTextField usernameField;
+    private final JTextField passwordField;
+    private final JTextField workingDirectoryField;
+    private final JButton saveSettingsButton;
+    private final JList fromList;
+    private final JList toList;
+    private final JCheckBox copyNewBox;
+    private final JCheckBox deleteOldBox;
+    private final JButton runButton;
+    private final DefaultListModel<String> fromListModel;
+    private final DefaultListModel<String> toListModel;
+    private final JLabel messageLabel;
+    private final Map<String, String> settings;
+
+    private Map<String, String> getNewSetting() {
+        settings.put("localDirectory", localDirectoryField.getText());
+        settings.put("hostname", hostnameField.getText());
+        settings.put("username", usernameField.getText());
+        try {
+            settings.put("password", model.encrypt(passwordField.getText()));
+        } catch (Exception ex) {
+            messageLabel.setText("Error:" + ex.getMessage());
+        }
+        settings.put("workingDirectory", workingDirectoryField.getText());
+        return settings;
+    }
 
     private void readRemoteSettings(String... parameters) {
         localDirectoryField.setText(model.getProperty("localDirectory"));
@@ -54,7 +75,7 @@ public class ManagerView extends JFrame implements ObserverIntf {
         try {
             passwordField.setText(model.decrypt(model.getProperty("password")));
         } catch (Exception ex) {
-            messageLabel.setText(ex.getMessage());
+            messageLabel.setText("Error:" + ex.getMessage());
         }
         workingDirectoryField.setText(model.getProperty("workingDirectory"));
 
@@ -94,10 +115,11 @@ public class ManagerView extends JFrame implements ObserverIntf {
         }
     }
 
-    public ManagerView(ManagerModelIntf model) {
+    public ManagerView(final ManagerModelIntf model, final ManagerControllerIntf controller) {
         super("FTP File Manager");
 
         this.model = model;
+        settings = new HashMap<>();
         model.registerObserver(this);
 
         setSize(new Dimension(800, 600));
@@ -115,7 +137,7 @@ public class ManagerView extends JFrame implements ObserverIntf {
         JLabel localDirectoryLabel = new JLabel("Local directory");
         settingsPanel.add(localDirectoryLabel);
 
-        localDirectoryField = new JTextField();
+        localDirectoryField = new JTextField(15);
         settingsPanel.add(localDirectoryField, "span 3");
 
         //FTP server setting
@@ -149,6 +171,12 @@ public class ManagerView extends JFrame implements ObserverIntf {
         //Save setting button
         settingsPanel.add(new JLabel(), "span 3");
         saveSettingsButton = new JButton("Save");
+        saveSettingsButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                controller.saveSetting(getNewSetting());
+            }
+        });
         settingsPanel.add(saveSettingsButton, "gapleft 100");
 
         //List panel
@@ -168,12 +196,30 @@ public class ManagerView extends JFrame implements ObserverIntf {
         JPanel boxesPanel = new JPanel(new MigLayout("wrap 1"));
 
         copyNewBox = new JCheckBox("Copy new");
+        copyNewBox.addItemListener(new ItemListener() {
+            @Override
+            public void itemStateChanged(ItemEvent e) {
+                controller.copyNewFiles(((JCheckBox) e.getItem()).isSelected());
+            }
+        });
         boxesPanel.add(copyNewBox);
 
         deleteOldBox = new JCheckBox("Delete old");
+        deleteOldBox.addItemListener(new ItemListener() {
+            @Override
+            public void itemStateChanged(ItemEvent e) {
+                controller.deleteOldFiles(((JCheckBox) e.getItem()).isSelected());
+            }
+        });
         boxesPanel.add(deleteOldBox);
 
         runButton = new JButton("Do it");
+        runButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                controller.run();
+            }
+        });
         boxesPanel.add(runButton, "center");
 
         listPanel.add(boxesPanel, "top");
@@ -208,16 +254,11 @@ public class ManagerView extends JFrame implements ObserverIntf {
     @Override
     public void update(String... parameters) {
         switch (parameters[0]) {
-            case "Settings:":
-                readRemoteSettings(parameters);
-                break;
-            case "Load:":
-                readRemoteSettings();
-                readRemoteData(parameters);
-                break;
             case "Error:":
                 messageLabel.setText(parameters.toString());
                 break;
+            case "Load:":
+                readRemoteSettings();
             default:
                 readRemoteData(parameters);
                 break;
