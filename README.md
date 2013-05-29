@@ -1,4 +1,4 @@
 FTPManager
 ==========
 
-FTP Manager client side
+FTP Manager RMI client side
